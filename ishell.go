@@ -19,7 +19,7 @@ import (
 
 	"github.com/abiosoft/readline"
 	"github.com/fatih/color"
-	shlex "github.com/flynn-archive/go-shlex"
+	"github.com/flynn-archive/go-shlex"
 )
 
 const (
@@ -58,8 +58,20 @@ type Shell struct {
 	progressBar       ProgressBar
 	pager             string
 	pagerArgs         []string
+	isUninterpreted   bool
+	lineTerminator    string
+	quitKeywords      []string
 	contextValues
 	Actions
+}
+
+// UninterpretedConfig configures an uninterpreted shell. See NewUninterpreted().
+type UninterpretedConfig struct {
+	ReadlineConfig *readline.Config
+	// The line terminator to use
+	LineTerminator string
+	// Quit keywords to exit the shell if discovered
+	QuitKeywords []string
 }
 
 // New creates a new shell with default settings. Uses standard output and default prompt ">> ".
@@ -76,6 +88,19 @@ func NewWithConfig(conf *readline.Config) *Shell {
 	}
 
 	return NewWithReadline(rl)
+}
+
+// NewUninterpreted creates a new uninterpreted shell, one which doesn't attempt to parse out commands and arguments,
+// only pull input lines and handle them with a custom handler. This is more appropriate for free-form shells such as
+// SQL queries, REPLs, and so on.
+func NewUninterpreted(conf *UninterpretedConfig) *Shell {
+	shell := NewWithConfig(conf.ReadlineConfig)
+
+	shell.isUninterpreted = true
+	shell.lineTerminator = conf.LineTerminator
+	shell.quitKeywords = conf.QuitKeywords
+
+	return shell
 }
 
 // NewWithReadline creates a new shell with a custom readline instance.
@@ -171,7 +196,12 @@ shell:
 		var err error
 		read := make(chan struct{})
 		go func() {
-			line, err = s.read()
+			if s.isUninterpreted {
+				line = make([]string, 1)
+				line[0], err = s.readUninterpreted()
+			} else {
+				line, err = s.read()
+			}
 			read <- struct{}{}
 		}()
 		select {
@@ -208,8 +238,13 @@ shell:
 				continue
 			}
 
-			err = handleInput(s, line)
+			if s.isUninterpreted {
+				err = handleUninterpretedInput(s, line[0])
+			} else {
+				err = handleInput(s, line)
+			}
 		}
+
 		if err != nil {
 			s.Println("Error:", err)
 		}
@@ -226,6 +261,26 @@ func (s *Shell) Active() bool {
 // Process runs shell using args in a non-interactive mode.
 func (s *Shell) Process(args ...string) error {
 	return handleInput(s, args)
+}
+
+func handleUninterpretedInput(s *Shell, line string) error {
+	// Check for any quit words and exit if found. In handleInputs(), the exit case is handled by a command named "exit"
+	trimmedLine := strings.TrimSpace(line)
+	trimmedLine = strings.TrimRight(trimmedLine, s.lineTerminator)
+	for _, keyword := range s.quitKeywords {
+		if trimmedLine == keyword {
+			s.Stop()
+			return nil
+		}
+	}
+
+	// Generic handler
+	if s.generic == nil {
+		return errNoHandler
+	}
+	c := newContext(s, nil, []string{line})
+	s.generic(c)
+	return c.err
 }
 
 func handleInput(s *Shell, line []string) error {
@@ -287,12 +342,70 @@ func (s *Shell) readLine() (line string, err error) {
 	return ls.line, ls.err
 }
 
+func (s *Shell) readUninterpreted() (string, error) {
+	s.rawArgs = nil
+	var lines string
+	var err error
+
+	if s.lineTerminator != "" {
+		firstLine := true
+		lines, err = s.readMultiLinesFunc(func(line string) (keepReading bool) {
+			if firstLine {
+				firstLine = false
+				for _, keyword := range s.quitKeywords {
+					if strings.TrimSpace(line) == keyword {
+						return false
+					}
+				}
+			}
+
+			return !strings.HasSuffix(strings.TrimSpace(line), s.lineTerminator)
+		})
+
+		if err != nil {
+			return "", err
+		}
+	} else {
+		eof := ""
+		heredoc := false
+
+		// heredoc multiline
+		lines, err = s.readMultiLinesFunc(func(line string) (keepReading bool) {
+			if !heredoc {
+				if strings.Contains(line, "<<") {
+					s := strings.SplitN(line, "<<", 2)
+					if eof = strings.TrimSpace(s[1]); eof != "" {
+						heredoc = true
+						return true
+					}
+				}
+			} else {
+				return line != eof
+			}
+			return strings.HasSuffix(strings.TrimSpace(line), "\\")
+		})
+
+		if err != nil {
+			return "", err
+		}
+
+		if heredoc {
+			s := strings.SplitN(lines, "<<", 2)
+			lines = strings.TrimSuffix(strings.SplitN(s[1], "\n", 2)[1], eof)
+		}
+	}
+
+	s.rawArgs = []string{lines}
+	return lines, nil
+}
+
 func (s *Shell) read() ([]string, error) {
 	s.rawArgs = nil
-	heredoc := false
 	eof := ""
+	heredoc := false
+
 	// heredoc multiline
-	lines, err := s.readMultiLinesFunc(func(line string) bool {
+	lines, err := s.readMultiLinesFunc(func(line string) (keepReading bool) {
 		if !heredoc {
 			if strings.Contains(line, "<<") {
 				s := strings.SplitN(line, "<<", 2)
@@ -331,7 +444,7 @@ func (s *Shell) read() ([]string, error) {
 	return args, err
 }
 
-func (s *Shell) readMultiLinesFunc(f func(string) bool) (string, error) {
+func (s *Shell) readMultiLinesFunc(f func(string) (keepReading bool)) (string, error) {
 	var lines bytes.Buffer
 	currentLine := 0
 	var err error
@@ -388,6 +501,12 @@ func (s *Shell) DeleteCmd(name string) {
 // It is called if the shell input could not be handled by any of the
 // added commands.
 func (s *Shell) NotFound(f func(*Context)) {
+	s.Uninterpreted(f)
+}
+
+// Uninterpreted adds a generic function for all inputs. It is only called if the shell is configured to handle
+// uninterpreted input, and is mutually exclusive with NotFound()
+func (s *Shell) Uninterpreted(f func(*Context)) {
 	s.generic = f
 }
 
@@ -422,6 +541,13 @@ func (s *Shell) SetHistoryPath(path string) {
 	config := s.reader.scanner.Config.Clone()
 	config.HistoryFile = path
 	s.reader.scanner, _ = readline.NewEx(config)
+}
+
+// AddHistory adds the given string to the history file. Useful for handling multi-line input, where the default
+// behavior of saving each line as its own history entry is incorrect. In that case, disable auto saving history and
+// handle it explicitly in the Uninterpreted() callback.
+func (s *Shell) AddHistory(history string) error {
+	return s.reader.scanner.SaveHistory(history)
 }
 
 // SetHomeHistoryPath is a convenience method that sets the history path

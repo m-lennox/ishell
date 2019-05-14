@@ -1,14 +1,12 @@
-package ishell_test
+package ishell
 
 import (
 	"testing"
-
-	"github.com/abiosoft/ishell"
 	"github.com/stretchr/testify/assert"
 )
 
-func newCmd(name string, help string) *ishell.Cmd {
-	return &ishell.Cmd{
+func newCmd(name string, help string) *Cmd {
+	return &Cmd{
 		Name: name,
 		Help: help,
 	}

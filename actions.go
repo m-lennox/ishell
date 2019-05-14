@@ -23,7 +23,7 @@ type Actions interface {
 	ReadPasswordErr() (string, error)
 	// ReadMultiLinesFunc reads multiple lines from standard input. It passes each read line to
 	// f and stops reading when f returns false.
-	ReadMultiLinesFunc(f func(string) bool) string
+	ReadMultiLinesFunc(f func(string) (keepReading bool)) string
 	// ReadMultiLines reads multiple lines from standard input. It stops reading when terminator
 	// is encountered at the end of the line. It returns the lines read including terminator.
 	// For more control, use ReadMultiLinesFunc.
@@ -102,13 +102,13 @@ func (s *shellActionsImpl) ReadPasswordErr() (string, error) {
 	return s.reader.readPasswordErr()
 }
 
-func (s *shellActionsImpl) ReadMultiLinesFunc(f func(string) bool) string {
+func (s *shellActionsImpl) ReadMultiLinesFunc(f func(string) (keepReading bool)) string {
 	lines, _ := s.readMultiLinesFunc(f)
 	return lines
 }
 
 func (s *shellActionsImpl) ReadMultiLines(terminator string) string {
-	return s.ReadMultiLinesFunc(func(line string) bool {
+	return s.ReadMultiLinesFunc(func(line string) (keepReading bool) {
 		if strings.HasSuffix(strings.TrimSpace(line), terminator) {
 			return false
 		}
