@@ -1,4 +1,4 @@
-module github.com/liquidata-inc/ishell
+module github.com/dolthub/ishell
 
 go 1.12
 
