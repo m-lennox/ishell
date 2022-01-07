@@ -60,6 +60,7 @@ type Shell struct {
 	pagerArgs         []string
 	isUninterpreted   bool
 	lineTerminator    string
+	lineTerminators   []string
 	quitKeywords      []string
 	contextValues
 	Actions
@@ -69,7 +70,7 @@ type Shell struct {
 type UninterpretedConfig struct {
 	ReadlineConfig *readline.Config
 	// The line terminator to use
-	LineTerminator string
+	LineTerminators []string
 	// Quit keywords to exit the shell if discovered
 	QuitKeywords []string
 }
@@ -97,7 +98,7 @@ func NewUninterpreted(conf *UninterpretedConfig) *Shell {
 	shell := NewWithConfig(conf.ReadlineConfig)
 
 	shell.isUninterpreted = true
-	shell.lineTerminator = conf.LineTerminator
+	shell.lineTerminators = conf.LineTerminators
 	shell.quitKeywords = conf.QuitKeywords
 
 	return shell
@@ -266,7 +267,9 @@ func (s *Shell) Process(args ...string) error {
 func handleUninterpretedInput(s *Shell, line string) error {
 	// Check for any quit words and exit if found. In handleInputs(), the exit case is handled by a command named "exit"
 	trimmedLine := strings.TrimSpace(line)
-	trimmedLine = strings.TrimRight(trimmedLine, s.lineTerminator)
+	for _, lt := range s.lineTerminators {
+		trimmedLine = strings.TrimRight(trimmedLine, lt)
+	}
 	for _, keyword := range s.quitKeywords {
 		if trimmedLine == keyword {
 			s.Stop()
@@ -358,8 +361,16 @@ func (s *Shell) readUninterpreted() (string, error) {
 					}
 				}
 			}
+			terminate := false
+			for _, lt := range s.lineTerminators {
+				if strings.HasSuffix(strings.TrimSpace(line), lt) {
+					terminate = true
+					s.lineTerminator = lt
+					break
+				}
+			}
 
-			return !strings.HasSuffix(strings.TrimSpace(line), s.lineTerminator)
+			return !terminate
 		})
 
 		if err != nil {
@@ -497,14 +508,14 @@ func (s *Shell) DeleteCmd(name string) {
 	s.rootCmd.DeleteCmd(name)
 }
 
-// LineTerminator sets the line terminator to the given one.
+// LineTerminator returns the line terminator that was used in shell.
 func (s *Shell) LineTerminator() string {
 	return s.lineTerminator
 }
 
 // SetLineTerminator sets the line terminator to the given one.
 func (s *Shell) SetLineTerminator(terminator string) {
-	s.lineTerminator = terminator
+	s.lineTerminators[0] = terminator
 }
 
 // NotFound adds a generic function for all inputs.
