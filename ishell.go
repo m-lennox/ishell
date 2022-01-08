@@ -98,6 +98,7 @@ func NewUninterpreted(conf *UninterpretedConfig) *Shell {
 	shell := NewWithConfig(conf.ReadlineConfig)
 
 	shell.isUninterpreted = true
+	shell.lineTerminator = conf.LineTerminators[0]
 	shell.lineTerminators = conf.LineTerminators
 	shell.quitKeywords = conf.QuitKeywords
 
