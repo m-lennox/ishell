@@ -60,7 +60,7 @@ type Shell struct {
 	pagerArgs         []string
 	isUninterpreted   bool
 	lineTerminator    string
-	lineTerminators   []string
+	lineTerminatorOptions   []string
 	quitKeywords      []string
 	contextValues
 	Actions
@@ -70,7 +70,7 @@ type Shell struct {
 type UninterpretedConfig struct {
 	ReadlineConfig *readline.Config
 	// The line terminator to use
-	LineTerminators []string
+	LineTerminatorOptions []string
 	// Quit keywords to exit the shell if discovered
 	QuitKeywords []string
 }
@@ -98,8 +98,8 @@ func NewUninterpreted(conf *UninterpretedConfig) *Shell {
 	shell := NewWithConfig(conf.ReadlineConfig)
 
 	shell.isUninterpreted = true
-	shell.lineTerminator = conf.LineTerminators[0]
-	shell.lineTerminators = conf.LineTerminators
+	shell.lineTerminator = conf.LineTerminatorOptions[0]
+	shell.lineTerminatorOptions = conf.LineTerminatorOptions
 	shell.quitKeywords = conf.QuitKeywords
 
 	return shell
@@ -268,7 +268,7 @@ func (s *Shell) Process(args ...string) error {
 func handleUninterpretedInput(s *Shell, line string) error {
 	// Check for any quit words and exit if found. In handleInputs(), the exit case is handled by a command named "exit"
 	trimmedLine := strings.TrimSpace(line)
-	for _, lt := range s.lineTerminators {
+	for _, lt := range s.lineTerminatorOptions {
 		trimmedLine = strings.TrimRight(trimmedLine, lt)
 	}
 	for _, keyword := range s.quitKeywords {
@@ -363,7 +363,7 @@ func (s *Shell) readUninterpreted() (string, error) {
 				}
 			}
 			terminate := false
-			for _, lt := range s.lineTerminators {
+			for _, lt := range s.lineTerminatorOptions {
 				if strings.HasSuffix(strings.TrimSpace(line), lt) {
 					terminate = true
 					s.lineTerminator = lt
@@ -516,7 +516,7 @@ func (s *Shell) LineTerminator() string {
 
 // SetLineTerminator sets the line terminator to the given one.
 func (s *Shell) SetLineTerminator(terminator string) {
-	s.lineTerminators[0] = terminator
+	s.lineTerminatorOptions[0] = terminator
 }
 
 // NotFound adds a generic function for all inputs.
