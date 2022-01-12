@@ -60,7 +60,7 @@ type Shell struct {
 	pagerArgs         []string
 	isUninterpreted   bool
 	lineTerminator    string
-	lineTerminatorOptions   []string
+	mysqlShellCmds    []string
 	quitKeywords      []string
 	contextValues
 	Actions
@@ -70,7 +70,8 @@ type Shell struct {
 type UninterpretedConfig struct {
 	ReadlineConfig *readline.Config
 	// The line terminator to use
-	LineTerminatorOptions []string
+	LineTerminator string
+	MysqlShellCmds []string
 	// Quit keywords to exit the shell if discovered
 	QuitKeywords []string
 }
@@ -98,8 +99,8 @@ func NewUninterpreted(conf *UninterpretedConfig) *Shell {
 	shell := NewWithConfig(conf.ReadlineConfig)
 
 	shell.isUninterpreted = true
-	shell.lineTerminator = conf.LineTerminatorOptions[0]
-	shell.lineTerminatorOptions = conf.LineTerminatorOptions
+	shell.lineTerminator = conf.LineTerminator
+	shell.mysqlShellCmds = conf.MysqlShellCmds
 	shell.quitKeywords = conf.QuitKeywords
 
 	return shell
@@ -268,7 +269,8 @@ func (s *Shell) Process(args ...string) error {
 func handleUninterpretedInput(s *Shell, line string) error {
 	// Check for any quit words and exit if found. In handleInputs(), the exit case is handled by a command named "exit"
 	trimmedLine := strings.TrimSpace(line)
-	for _, lt := range s.lineTerminatorOptions {
+	trimmedLine = strings.TrimRight(trimmedLine, s.lineTerminator)
+	for _, lt := range s.mysqlShellCmds {
 		trimmedLine = strings.TrimRight(trimmedLine, lt)
 	}
 	for _, keyword := range s.quitKeywords {
@@ -362,16 +364,17 @@ func (s *Shell) readUninterpreted() (string, error) {
 					}
 				}
 			}
-			terminate := false
-			for _, lt := range s.lineTerminatorOptions {
-				if strings.HasSuffix(strings.TrimSpace(line), lt) {
-					terminate = true
-					s.lineTerminator = lt
-					break
+
+			if strings.HasSuffix(strings.TrimSpace(line), s.lineTerminator) {
+				return false
+			}
+			for _, sc := range s.mysqlShellCmds {
+				if strings.HasSuffix(strings.TrimSpace(line), sc) {
+					return false
 				}
 			}
 
-			return !terminate
+			return true
 		})
 
 		if err != nil {
@@ -516,7 +519,7 @@ func (s *Shell) LineTerminator() string {
 
 // SetLineTerminator sets the line terminator to the given one.
 func (s *Shell) SetLineTerminator(terminator string) {
-	s.lineTerminatorOptions[0] = terminator
+	s.lineTerminator = terminator
 }
 
 // NotFound adds a generic function for all inputs.
