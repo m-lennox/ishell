@@ -512,7 +512,7 @@ func (s *Shell) DeleteCmd(name string) {
 	s.rootCmd.DeleteCmd(name)
 }
 
-// LineTerminator returns the line terminator that was used in shell.
+// LineTerminator sets the line terminator to the given one.
 func (s *Shell) LineTerminator() string {
 	return s.lineTerminator
 }
