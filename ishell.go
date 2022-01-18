@@ -60,6 +60,7 @@ type Shell struct {
 	pagerArgs         []string
 	isUninterpreted   bool
 	lineTerminator    string
+	mysqlShellCmds    []string
 	quitKeywords      []string
 	contextValues
 	Actions
@@ -70,6 +71,7 @@ type UninterpretedConfig struct {
 	ReadlineConfig *readline.Config
 	// The line terminator to use
 	LineTerminator string
+	MysqlShellCmds []string
 	// Quit keywords to exit the shell if discovered
 	QuitKeywords []string
 }
@@ -98,6 +100,7 @@ func NewUninterpreted(conf *UninterpretedConfig) *Shell {
 
 	shell.isUninterpreted = true
 	shell.lineTerminator = conf.LineTerminator
+	shell.mysqlShellCmds = conf.MysqlShellCmds
 	shell.quitKeywords = conf.QuitKeywords
 
 	return shell
@@ -267,6 +270,9 @@ func handleUninterpretedInput(s *Shell, line string) error {
 	// Check for any quit words and exit if found. In handleInputs(), the exit case is handled by a command named "exit"
 	trimmedLine := strings.TrimSpace(line)
 	trimmedLine = strings.TrimRight(trimmedLine, s.lineTerminator)
+	for _, lt := range s.mysqlShellCmds {
+		trimmedLine = strings.TrimRight(trimmedLine, lt)
+	}
 	for _, keyword := range s.quitKeywords {
 		if trimmedLine == keyword {
 			s.Stop()
@@ -359,7 +365,16 @@ func (s *Shell) readUninterpreted() (string, error) {
 				}
 			}
 
-			return !strings.HasSuffix(strings.TrimSpace(line), s.lineTerminator)
+			if strings.HasSuffix(strings.TrimSpace(line), s.lineTerminator) {
+				return false
+			}
+			for _, sc := range s.mysqlShellCmds {
+				if strings.HasSuffix(strings.TrimSpace(line), sc) {
+					return false
+				}
+			}
+
+			return true
 		})
 
 		if err != nil {
