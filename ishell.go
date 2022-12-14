@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -35,6 +36,7 @@ var (
 	strMultiChoiceSpacer  = " "
 	strMultiChoiceOpen    = "⬡ "
 	strMultiChoiceSelect  = "⬢ "
+	delimiterRegex        = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)\s*$`)
 )
 
 // Shell is an interactive cli shell.
@@ -267,6 +269,10 @@ func (s *Shell) Process(args ...string) error {
 }
 
 func handleUninterpretedInput(s *Shell, line string) error {
+	// DELIMITER is handled before this call, so we just return here
+	if delimiterRegex.MatchString(line) {
+		return nil
+	}
 	// Check for any quit words and exit if found. In handleInputs(), the exit case is handled by a command named "exit"
 	trimmedLine := strings.TrimSpace(line)
 	trimmedLine = strings.TrimRight(trimmedLine, s.lineTerminator)
@@ -363,6 +369,10 @@ func (s *Shell) readUninterpreted() (string, error) {
 						return false
 					}
 				}
+			}
+			if matches := delimiterRegex.FindStringSubmatch(line); len(matches) == 2 {
+				s.lineTerminator = matches[1]
+				return false
 			}
 
 			if strings.HasSuffix(strings.TrimSpace(line), s.lineTerminator) {
