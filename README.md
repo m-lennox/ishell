@@ -4,6 +4,9 @@ ishell is an interactive shell library for creating interactive cli applications
 [![Documentation](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://godoc.org/github.com/abiosoft/ishell)
 [![Go Report Card](https://goreportcard.com/badge/github.com/abiosoft/ishell)](https://goreportcard.com/report/github.com/abiosoft/ishell)
 
+## Fork info
+This is a fork that removes the need for special line endings in [dolthub/ishell](https://github.com/dolthub/ishell) for use in a personal project.
+
 ## Older version
 The current master is not backward compatible with older version. Kindly change your import path to `gopkg.in/abiosoft/ishell.v1`.
 
