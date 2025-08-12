@@ -61,10 +61,11 @@ type Shell struct {
 	pager              string
 	pagerArgs          []string
 	isUninterpreted    bool
+	runOnReturn        bool
 	lineTerminator     string
 	specialTerminators []string
-	backSlashCmds      []string
-	quitKeywords       []string
+	//backSlashCmds      []string
+	quitKeywords []string
 	contextValues
 	Actions
 }
@@ -72,12 +73,14 @@ type Shell struct {
 // UninterpretedConfig configures an uninterpreted shell. See NewUninterpreted().
 type UninterpretedConfig struct {
 	ReadlineConfig *readline.Config
+	// Whether to execute on return in every line
+	RunOnReturn bool
 	// The line terminator to use
 	LineTerminator string
 	// Terminators which can be used instead of the line terminator.
 	SpecialTerminators []string
 	// Prefix strings for single line commands that don't require a terminator. Backslash commands must start with '\'
-	BackSlashCmds []string
+	//BackSlashCmds []string
 	// Quit keywords to exit the shell if discovered
 	QuitKeywords []string
 }
@@ -107,7 +110,8 @@ func NewUninterpreted(conf *UninterpretedConfig) *Shell {
 	shell.isUninterpreted = true
 	shell.lineTerminator = conf.LineTerminator
 	shell.specialTerminators = conf.SpecialTerminators
-	shell.backSlashCmds = conf.BackSlashCmds
+	shell.runOnReturn = conf.RunOnReturn
+	//shell.backSlashCmds = conf.BackSlashCmds
 	shell.quitKeywords = conf.QuitKeywords
 
 	return shell
@@ -364,6 +368,15 @@ func (s *Shell) readUninterpreted() (string, error) {
 	var lines string
 	var err error
 
+	if s.runOnReturn {
+		lines, err = s.readMultiLinesFunc(func(line string) (keepReading bool) {
+			if !strings.HasSuffix(strings.TrimSpace(line), s.lineTerminator) {
+				return false
+			}
+			return true
+		})
+		return lines, err
+	}
 	if s.lineTerminator != "" {
 		firstLine := true
 		lines, err = s.readMultiLinesFunc(func(line string) (keepReading bool) {
@@ -388,11 +401,11 @@ func (s *Shell) readUninterpreted() (string, error) {
 					return false
 				}
 			}
-			for _, sc := range s.backSlashCmds {
-				if strings.HasPrefix(strings.TrimSpace(line), sc) {
-					return false
-				}
-			}
+			//for _, sc := range s.backSlashCmds {
+			//	if strings.HasPrefix(strings.TrimSpace(line), sc) {
+			//		return false
+			//	}
+			//}
 
 			return true
 		})
