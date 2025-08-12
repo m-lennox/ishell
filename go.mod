@@ -1,4 +1,4 @@
-module github.com/dolthub/ishell
+module github.com/m-lennox/ishell
 
 go 1.12
 
